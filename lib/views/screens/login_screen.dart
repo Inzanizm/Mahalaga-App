@@ -36,7 +36,7 @@ class LoginScreen extends StatelessWidget {
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(0, 20, 0, 0),
-                  child: FilledButton.icon(
+                  child: OutlinedButton.icon(
                     onPressed: () {
                       Navigator.of(context).pushReplacement(
                         MaterialPageRoute(
