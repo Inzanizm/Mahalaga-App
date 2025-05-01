@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:mahalaga_app/views/screens/login_screen.dart';
+import 'package:mahalaga_app/views/pages/login_screen.dart';
 import 'package:video_player/video_player.dart';
 
 class VideoSplashScreen extends StatefulWidget {
