@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mahalaga_app/database/pet_table.dart';
 import 'package:mahalaga_app/views/pages/pet_page/pet_detail_screen.dart';
 
 class SelectPetPage extends StatelessWidget {
@@ -39,7 +40,20 @@ class SelectPetPage extends StatelessWidget {
                     context,
                     MaterialPageRoute(
                       builder: (context) {
-                        return PetDetailScreen(pet: pets[index]);
+                        return PetDetailScreen(
+                          pet: PetTable(
+                            name: pets[index]['name'],
+                            breed: pets[index]['breed'],
+                            age: pets[index]['age'],
+                            image: pets[index]['image'],
+                            species: pets[index]['species'] ?? 'Unknown',
+                            status: pets[index]['status'] ?? 'Healthy',
+                            weight: pets[index]['weight'] ?? 0.0,
+                            blood: pets[index]['blood'] ?? 'Unknown',
+                            allergy: pets[index]['allergy'] ?? 'None',
+                            mark: pets[index]['mark'] ?? 'None',
+                          ),
+                        );
                       },
                     ),
                   );

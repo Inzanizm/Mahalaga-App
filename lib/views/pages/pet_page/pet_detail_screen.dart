@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
-import 'package:mahalaga_app/data/notifiers.dart';
-import 'package:mahalaga_app/data/selected_pet_data.dart';
+import 'package:mahalaga_app/database/pet_table.dart';
+import 'package:mahalaga_app/database/pet_table_database.dart';
+import 'package:mahalaga_app/database/reminder.dart';
+import 'package:mahalaga_app/database/reminder_database.dart';
 
 class PetDetailScreen extends StatefulWidget {
-  final Map<String, dynamic> pet;
+  // final Map<String, dynamic> pet;
+  final PetTable pet;
 
   // Constructor to receive pet data
   const PetDetailScreen({super.key, required this.pet});
@@ -15,6 +18,10 @@ class PetDetailScreen extends StatefulWidget {
 }
 
 class _PetDetailScreenState extends State<PetDetailScreen> {
+  late PetTable pet; // Pet object to hold pet data
+
+  List<Reminder> remindersTable = [];
+
   List<String> reminders = []; // List to hold reminders
   List<String> appointments = []; // List to hold appointments
   List<String> medications = [
@@ -40,6 +47,41 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
 
   // The selected pet, which is assigned from the list of pets
   Map<String, dynamic>? selectedPet;
+
+  Future<void> loadReminders(int petId) async {
+    final results = await ReminderDatabase().getRemindersByPetId(petId);
+    setState(() {
+      remindersTable = results;
+    });
+  }
+
+  void _confirmDeletePet(BuildContext context, PetTable pet) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: Text('Delete Pet'),
+            content: Text(
+              'Are you sure you want to delete ${pet.name}? This cannot be undone.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false), // Cancel
+                child: Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true), // Confirm
+                child: Text('Delete', style: TextStyle(color: Colors.red)),
+              ),
+            ],
+          ),
+    );
+
+    if (confirmed == true) {
+      await PetTableDatabase().deletePetTable(pet);
+      Navigator.pop(context); // Go back to the pet profile list
+    }
+  }
 
   @override
   void initState() {
@@ -68,8 +110,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
   }
 
   // Function to add a new reminder
-  void addReminder() {
-    // List of reminder types (e.g., medication, grooming)
+  void addReminder(PetTable pet) {
     List<String> reminderTypes = [
       'Medications',
       'Feeding',
@@ -79,13 +120,11 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
       'Medication Refill',
     ];
 
-    // Initial state for the reminder dialog (default reminder type, controller for text input, etc.)
     String selectedReminderType = reminderTypes[0];
     TextEditingController localReminderController = TextEditingController();
-    DateTime localSelectedDate = DateTime.now(); // Set current date initially
-    TimeOfDay localSelectedTime = TimeOfDay.now(); // Set current time initially
+    DateTime localSelectedDate = DateTime.now();
+    TimeOfDay localSelectedTime = TimeOfDay.now();
 
-    // Show dialog to add reminder
     showDialog(
       context: context,
       builder: (BuildContext dialogContext) {
@@ -115,7 +154,6 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                     ),
                     SizedBox(height: 16),
 
-                    // Dropdown menu for selecting reminder type
                     DropdownButton<String>(
                       value: selectedReminderType,
                       icon: Icon(Icons.arrow_drop_down, color: Colors.teal),
@@ -129,16 +167,17 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                         }
                       },
                       items:
-                          reminderTypes.map((String value) {
-                            return DropdownMenuItem<String>(
-                              value: value,
-                              child: Text(value),
-                            );
-                          }).toList(),
+                          reminderTypes
+                              .map(
+                                (String value) => DropdownMenuItem<String>(
+                                  value: value,
+                                  child: Text(value),
+                                ),
+                              )
+                              .toList(),
                     ),
                     SizedBox(height: 16),
 
-                    // TextField for entering reminder details
                     SizedBox(
                       height: 100,
                       child: TextField(
@@ -157,7 +196,6 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                     ),
                     SizedBox(height: 16),
 
-                    // Date picker for selecting date
                     GestureDetector(
                       onTap: () async {
                         DateTime? picked = await showDatePicker(
@@ -185,7 +223,6 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                     ),
                     SizedBox(height: 20),
 
-                    // Time picker for selecting time
                     GestureDetector(
                       onTap: () async {
                         TimeOfDay? picked = await showTimePicker(
@@ -211,24 +248,41 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                     ),
                     SizedBox(height: 20),
 
-                    // Save and Cancel buttons
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
                         ElevatedButton(
-                          onPressed: () {
-                            // Save the reminder if it's valid
+                          onPressed: () async {
                             String reminderText =
                                 localReminderController.text.trim();
                             if (reminderText.isEmpty) return;
 
-                            String fullReminder =
-                                '$selectedReminderType - $reminderText on ${localSelectedDate.month}/${localSelectedDate.day} at ${localSelectedTime.format(context)}';
+                            // Combine date and time into DateTime
+                            DateTime combinedDateTime = DateTime(
+                              localSelectedDate.year,
+                              localSelectedDate.month,
+                              localSelectedDate.day,
+                              localSelectedTime.hour,
+                              localSelectedTime.minute,
+                            );
 
+                            // Create and insert Reminder
+                            Reminder newReminder = Reminder(
+                              petId: pet.id!,
+                              type: selectedReminderType,
+                              description: reminderText,
+                              reminderDate: combinedDateTime,
+                            );
+
+                            await ReminderDatabase().createReminder(
+                              newReminder,
+                            );
+
+                            // Reload the reminders from the database and update the UI
+                            final updatedReminders = await ReminderDatabase()
+                                .getRemindersByPetId(pet.id!);
                             setState(() {
-                              reminders.add(
-                                fullReminder,
-                              ); // Add reminder to list
+                              remindersTable = updatedReminders;
                             });
 
                             Navigator.of(dialogContext).pop(); // Close dialog
@@ -547,58 +601,15 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
 
   // Function to edit a reminder at the specified index in the reminders list
   void editReminder(int index) {
-    // Example reminder format: "Feeding - Chicken meal on 4/28 at 6:30 PM"
-    String reminder = reminders[index]; // Get the reminder at the given index
-    List<String> reminderParts = reminder.split(
-      ' - ',
-    ); // Split the reminder into parts
-    if (reminderParts.length < 2) {
-      return; // If the reminder format is invalid, return
-    }
+    Reminder reminder = remindersTable[index];
 
-    String selectedReminderType =
-        reminderParts[0]; // Get the reminder type (e.g., Feeding)
-    String detailsAndDate = reminderParts[1]; // Get the details and date part
+    String selectedReminderType = reminder.type;
+    DateTime selectedDate = reminder.reminderDate;
+    TimeOfDay selectedTime = TimeOfDay.fromDateTime(reminder.reminderDate);
+    final TextEditingController localReminderController = TextEditingController(
+      text: reminder.description,
+    );
 
-    // Split the details and date part into reminder details and date-time
-    List<String> detailsParts = detailsAndDate.split(' on ');
-    String reminderDetails =
-        detailsParts[0]; // Extract the reminder details (e.g., "Chicken meal")
-    String dateTimePart =
-        detailsParts.length > 1 ? detailsParts[1] : ''; // Extract date and time
-
-    // Try to extract the date and time from the dateTimePart
-    if (dateTimePart.contains(' at ')) {
-      List<String> dateAndTime = dateTimePart.split(' at ');
-      String datePart = dateAndTime[0]; // Extract date (e.g., "4/28")
-      String timePart = dateAndTime[1]; // Extract time (e.g., "6:30 PM")
-
-      // Parse the date
-      List<String> dateSplit = datePart.split('/');
-      if (dateSplit.length == 2) {
-        int month = int.parse(dateSplit[0]);
-        int day = int.parse(dateSplit[1]);
-        selectedDate = DateTime(
-          DateTime.now().year,
-          month,
-          day,
-        ); // Set the selected date
-      }
-
-      // Parse the time
-      TimeOfDay? parsedTime = parseTimeOfDay(timePart);
-      if (parsedTime != null) {
-        selectedTime = parsedTime; // Set the selected time
-      }
-    }
-
-    // Text controller for editing the reminder's details
-    final TextEditingController localReminderController =
-        TextEditingController();
-    localReminderController.text =
-        reminderDetails; // Set the current reminder details in the text field
-
-    // Show the dialog to edit the reminder
     showDialog(
       context: context,
       builder: (BuildContext dialogContext) {
@@ -606,9 +617,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
           builder: (BuildContext context, StateSetter setModalState) {
             return Dialog(
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(
-                  15.0,
-                ), // Rounded corners for the dialog
+                borderRadius: BorderRadius.circular(15.0),
               ),
               elevation: 10,
               child: Container(
@@ -630,7 +639,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                     ),
                     SizedBox(height: 16),
 
-                    // Dropdown for selecting reminder type (e.g., Medications, Feeding)
+                    // Dropdown
                     DropdownButton<String>(
                       value: selectedReminderType,
                       icon: Icon(Icons.arrow_drop_down, color: Colors.teal),
@@ -639,8 +648,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                       onChanged: (String? newValue) {
                         if (newValue != null) {
                           setModalState(() {
-                            selectedReminderType =
-                                newValue; // Update the selected reminder type
+                            selectedReminderType = newValue;
                           });
                         }
                       },
@@ -661,7 +669,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                     ),
                     SizedBox(height: 20),
 
-                    // TextField for entering reminder details
+                    // TextField
                     SizedBox(
                       height: 100,
                       child: TextField(
@@ -674,26 +682,24 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                             horizontal: 12,
                           ),
                         ),
-                        maxLines: null, // Allows multi-line input
-                        expands:
-                            true, // Makes the text field expand to fill the available space
+                        maxLines: null,
+                        expands: true,
                       ),
                     ),
                     SizedBox(height: 16),
 
-                    // Date picker for selecting the reminder date
+                    // Date picker
                     GestureDetector(
                       onTap: () async {
                         DateTime? picked = await showDatePicker(
                           context: context,
                           initialDate: selectedDate,
-                          // Use the currently selected date
                           firstDate: DateTime(2000),
                           lastDate: DateTime(2101),
                         );
-                        if (picked != null && picked != selectedDate) {
+                        if (picked != null) {
                           setModalState(() {
-                            selectedDate = picked; // Update the selected date
+                            selectedDate = picked;
                           });
                         }
                       },
@@ -710,17 +716,16 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                     ),
                     SizedBox(height: 20),
 
-                    // Time picker for selecting the reminder time
+                    // Time picker
                     GestureDetector(
                       onTap: () async {
                         TimeOfDay? picked = await showTimePicker(
                           context: context,
-                          initialTime:
-                              selectedTime, // Use the currently selected time
+                          initialTime: selectedTime,
                         );
-                        if (picked != null && picked != selectedTime) {
+                        if (picked != null) {
                           setModalState(() {
-                            selectedTime = picked; // Update the selected time
+                            selectedTime = picked;
                           });
                         }
                       },
@@ -737,28 +742,45 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                     ),
                     SizedBox(height: 20),
 
-                    // Buttons to save or cancel the changes
+                    // Buttons
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
                         ElevatedButton(
-                          onPressed: () {
-                            String newReminderDetail =
+                          onPressed: () async {
+                            String newDetails =
                                 localReminderController.text.trim();
-                            if (newReminderDetail.isEmpty) return;
+                            if (newDetails.isEmpty) return;
 
-                            // Format the updated reminder with type, details, date, and time
-                            String updatedReminder =
-                                '$selectedReminderType - $newReminderDetail on ${selectedDate.month}/${selectedDate.day} at ${selectedTime.format(context)}';
+                            DateTime combinedDateTime = DateTime(
+                              selectedDate.year,
+                              selectedDate.month,
+                              selectedDate.day,
+                              selectedTime.hour,
+                              selectedTime.minute,
+                            );
 
-                            setState(() {
-                              reminders[index] =
-                                  updatedReminder; // Update the reminder in the list
-                            });
+                            // Update locally
+                            Reminder updatedReminder = reminder.copyWith(
+                              type: selectedReminderType,
+                              description: newDetails,
+                              reminderDate: combinedDateTime,
+                            );
 
-                            Navigator.of(
-                              dialogContext,
-                            ).pop(); // Close the dialog
+                            try {
+                              await ReminderDatabase().updateReminder(
+                                updatedReminder,
+                              );
+
+                              // Update in UI
+                              setState(() {
+                                remindersTable[index] = updatedReminder;
+                              });
+
+                              Navigator.of(dialogContext).pop();
+                            } catch (e) {
+                              print('Failed to update reminder: $e');
+                            }
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.teal,
@@ -771,9 +793,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                         ),
                         ElevatedButton(
                           onPressed: () {
-                            Navigator.of(
-                              dialogContext,
-                            ).pop(); // Close the dialog without saving
+                            Navigator.of(dialogContext).pop();
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.grey,
@@ -797,36 +817,43 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
   }
 
   // This function is used to build a reminder card with edit and delete options.
-  _buildReminderCard(String reminderText, Function onEdit, Function onDelete) {
+  Widget _buildReminderCard(
+    Reminder reminder,
+    VoidCallback onEdit,
+    VoidCallback onDelete,
+  ) {
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-      // Rounded corners for the card
       elevation: 5,
-      // Card shadow for a slight elevation effect
       margin: EdgeInsets.symmetric(vertical: 8),
-      // Vertical margin between cards
       child: ListTile(
         leading: Icon(Icons.notification_important, color: Colors.teal),
-        // Icon at the start of the card
-        title: Text(reminderText),
-        // Display the reminder text
+        title: Text(
+          reminder.type,
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(height: 4),
+            Text(reminder.description),
+            SizedBox(height: 4),
+            Text(
+              'Date: ${reminder.reminderDate.toLocal().toString().split('.')[0]}',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+          ],
+        ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
-          // Align buttons to the right of the card
           children: [
-            // Edit button to show the Edit Reminder dialog when pressed
             IconButton(
               icon: Icon(Icons.edit, color: Colors.teal),
-              onPressed: () {
-                onEdit(); // Call the provided onEdit function to open the edit dialog
-              },
+              onPressed: onEdit,
             ),
-            // Delete button to trigger the delete logic when pressed
             IconButton(
               icon: Icon(Icons.delete, color: Colors.red),
-              onPressed: () {
-                onDelete(); // Call the provided onDelete function to handle the delete action
-              },
+              onPressed: onDelete,
             ),
           ],
         ),
@@ -1144,12 +1171,28 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
   }
 
   // This function deletes a reminder from the reminders list at the specified index.
-  void deleteReminder(int index) {
-    setState(() {
-      reminders.removeAt(
-        index,
-      ); // Removes the reminder from the list at the given index
-    });
+  void deleteReminder(int index) async {
+    if (index < 0 || index >= remindersTable.length) {
+      print('Invalid index: $index');
+      return;
+    }
+
+    final reminderToDelete = remindersTable[index];
+
+    try {
+      // Delete from Supabase
+      await ReminderDatabase().deleteReminder(reminderToDelete.id.toString());
+
+      // Remove from local list and update UI
+      setState(() {
+        remindersTable.removeAt(index);
+      });
+
+      print('Reminder deleted successfully');
+    } catch (e) {
+      print('Error deleting reminder: $e');
+      // Optional: Show a snackbar or dialog
+    }
   }
 
   // This function deletes an appointment from the appointments list at the specified index.
@@ -1184,24 +1227,22 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
   // It takes the pet details, context, and a callback function to update the pet data.
   void _showSettingsDialog(
     BuildContext context,
-    int index,
-    Map<String, dynamic> pet,
-    Function(Map<String, dynamic>) onPetUpdated,
+    PetTable pet,
+    PetTableDatabase db,
+    Function() onUpdateDone,
   ) {
-    // Text controllers initialized with the current pet details
-    final nameController = TextEditingController(text: pet['name']);
-    final speciesController = TextEditingController(text: pet['species']);
-    final breedController = TextEditingController(text: pet['breed']);
-    final ageController = TextEditingController(text: pet['age']);
-    final statusController = TextEditingController(text: pet['status']);
-    final weightController = TextEditingController(text: pet['weight']);
-    final bloodController = TextEditingController(text: pet['blood']);
-    final allergyController = TextEditingController(text: pet['allergy']);
-    final markController = TextEditingController(text: pet['mark']);
+    final nameController = TextEditingController(text: pet.name);
+    final speciesController = TextEditingController(text: pet.species);
+    final breedController = TextEditingController(text: pet.breed);
+    final ageController = TextEditingController(text: pet.age.toString());
+    final statusController = TextEditingController(text: pet.status);
+    final weightController = TextEditingController(text: pet.weight.toString());
+    final bloodController = TextEditingController(text: pet.blood);
+    final allergyController = TextEditingController(text: pet.allergy);
+    final markController = TextEditingController(text: pet.mark);
     XFile? newPickedImage;
     final ImagePicker picker = ImagePicker();
 
-    // Show dialog to edit pet profile
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -1211,9 +1252,9 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
               ),
-              title: Center(
+              title: const Center(
                 child: Text(
-                  "Edit Pet Profile", // Dialog title
+                  "Edit Pet Profile",
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     color: Colors.teal,
@@ -1225,7 +1266,6 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                   child: Column(
                     children: [
-                      // Profile image picker (tap to select new image)
                       GestureDetector(
                         onTap: () async {
                           final picked = await picker.pickImage(
@@ -1233,8 +1273,7 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                           );
                           if (picked != null) {
                             setState(() {
-                              newPickedImage =
-                                  picked; // Update image if new image picked
+                              newPickedImage = picked;
                             });
                           }
                         },
@@ -1242,19 +1281,16 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                           radius: 45,
                           backgroundImage:
                               newPickedImage != null
-                                  ? FileImage(
-                                    File(newPickedImage!.path),
-                                  ) // New image if available
-                                  : pet['image'] != null
-                                  ? FileImage(
-                                    File(pet['image']),
-                                  ) // Existing image if available
-                                  : AssetImage('assets/images/dog.png')
-                                      as ImageProvider, // Default image
+                                  ? FileImage(File(newPickedImage!.path))
+                                  : (pet.image != null && pet.image!.isNotEmpty
+                                          ? FileImage(File(pet.image!))
+                                          : const AssetImage(
+                                            'assets/images/dog.png',
+                                          ))
+                                      as ImageProvider,
                         ),
                       ),
                       const SizedBox(height: 20),
-                      // Text fields for editing pet details (using _buildTextField style)
                       _buildTextField(
                         controller: nameController,
                         label: 'Pet Name',
@@ -1317,12 +1353,10 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                 ),
               ),
               actions: [
-                // Cancel button to close the dialog without saving changes
                 TextButton(
                   child: const Text("Cancel"),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
-                // Save button to save changes and return updated pet details
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.teal,
@@ -1330,26 +1364,26 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
                       borderRadius: BorderRadius.circular(10),
                     ),
                   ),
-                  onPressed: () {
-                    final updatedPet = {
-                      'name': nameController.text,
-                      'species': speciesController.text,
-                      'breed': breedController.text,
-                      'age': ageController.text,
-                      'status': statusController.text,
-                      'weight': weightController.text,
-                      'blood': bloodController.text,
-                      'allergy': allergyController.text,
-                      'mark': markController.text,
-                      'image': newPickedImage?.path ?? pet['image'],
-                      // Use new image if available, else use old one
-                    };
+                  onPressed: () async {
+                    // Update the database
+                    await db.updatePetTable(
+                      pet,
+                      nameController.text,
+                      speciesController.text,
+                      breedController.text,
+                      int.tryParse(ageController.text) ?? 0,
+                      statusController.text,
+                      int.tryParse(weightController.text) ?? 0,
+                      bloodController.text,
+                      allergyController.text,
+                      markController.text,
+                      newPickedImage?.path ?? pet.image,
+                    );
 
-                    // Update the selected pet data
-                    SelectedPetData.selectedPet = updatedPet; // ✅
-                    Navigator.of(
-                      context,
-                    ).pop(updatedPet); // Return updated pet details
+                    // Callback to refresh view
+                    onUpdateDone();
+
+                    Navigator.of(context).pop();
                   },
                   child: const Text("Save"),
                 ),
@@ -1436,216 +1470,218 @@ class _PetDetailScreenState extends State<PetDetailScreen> {
     );
   }
 
+  bool _didLoadReminders = false;
+
   @override
   Widget build(BuildContext context) {
     // Get the selected pet or use the passed pet from the widget
-    final pet = SelectedPetData.selectedPet ?? widget.pet;
+    final pet = widget.pet;
+    PetTable currentPet = pet;
 
-    return ValueListenableBuilder<Map<String, dynamic>?>(
-      valueListenable: SelectedPetData.selectedPetNotifier,
-      builder: (context, pet, child) {
-        final currentPet =
-            pet ?? widget.pet; // Use the selected pet or the passed pet
-
-        return Scaffold(
-          appBar: AppBar(
-            title: Text('Pet Profile'), // AppBar title
-            backgroundColor: Colors.teal, // AppBar background color
-            actions: [
-              // Settings button to edit pet profile
-              IconButton(
-                icon: Icon(Icons.settings),
-                onPressed: () {
-                  // Ensure pet is non-null before proceeding
-                  if (pet != null) {
-                    // Show settings dialog to edit pet profile
-                    _showSettingsDialog(context, pets.indexOf(pet), pet!, (
-                      updatedPet,
-                    ) {
-                      setState(() {
-                        final index = pets.indexOf(pet);
-                        pets[index] = updatedPet;
-                        petListNotifier.value[index] = updatedPet;
-                        petListNotifier
-                            .notifyListeners(); // Make sure listeners update
-                        SelectedPetData.selectedPet = updatedPet;
-                      });
-                    });
-                  }
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Pet Profile'), // AppBar title
+        backgroundColor: Colors.teal, // AppBar background color
+        actions: [
+          // Settings button to edit pet profile
+          IconButton(
+            icon: Icon(Icons.edit),
+            onPressed: () {
+              _showSettingsDialog(
+                context,
+                currentPet, // This must be a PetTable object, not a Map
+                PetTableDatabase(), // Create an instance of PetTableDatabase
+                () {
+                  setState(() {
+                    // Re-fetch or reload the pet list if needed
+                  });
                 },
-              ),
-            ],
+              );
+            },
           ),
-          body:
-              selectedPet == null
-                  ? Center(
-                    child: Text('No pet selected'),
-                  ) // Show message if no pet is selected
-                  : SingleChildScrollView(
-                    // Scrollable content for pet profile
-                    padding: EdgeInsets.all(16),
-                    child: Column(
-                      children: [
-                        // Pet profile image
-                        CircleAvatar(
-                          radius: 60,
-                          backgroundImage:
-                              pet?['image'] != null
-                                  ? NetworkImage(
-                                    pet?['image'],
-                                  ) // Show image if available
-                                  : AssetImage('assets/images/dog.png')
-                                      as ImageProvider, // Default image
-                        ),
-                        SizedBox(height: 16),
-                        // Pet name and breed/age info
-                        Text(
-                          pet?['name'] ?? 'Unknown',
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text('${pet?['breed']} • ${pet?['age']} years'),
-                        SizedBox(height: 20),
+          IconButton(
+            icon: Icon(Icons.delete),
+            onPressed: () {
+              _confirmDeletePet(context, pet);
+            },
+          ),
+        ],
+      ),
+      body: StreamBuilder<PetTable>(
+        stream: PetTableDatabase().watchPetById(pet.id!),
+        initialData: pet,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator());
+          }
 
-                        // Reminders section with add button
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Reminders',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              IconButton(
-                                icon: Icon(Icons.add),
-                                onPressed: () {
-                                  addReminder(); // Trigger the add reminder function
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                        // Display list of reminders
-                        ListView.builder(
-                          shrinkWrap: true,
-                          itemCount: reminders.length,
-                          itemBuilder: (context, index) {
-                            return _buildReminderCard(
-                              reminders[index],
-                              () =>
-                                  editReminder(index), // Edit reminder function
-                              () => deleteReminder(
-                                index,
-                              ), // Delete reminder function
-                            );
-                          },
-                        ),
+          if (!snapshot.hasData) {
+            return Center(child: Text('Pet not found'));
+          }
 
-                        SizedBox(height: 20),
+          currentPet = snapshot.data!;
 
-                        // Appointments section with add button
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Appointments',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              IconButton(
-                                icon: Icon(Icons.add),
-                                onPressed: () {
-                                  addAppointment(); // Trigger the add appointment function
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                        // Display list of appointments
-                        ListView.builder(
-                          shrinkWrap: true,
-                          itemCount: appointments.length,
-                          itemBuilder: (context, index) {
-                            return _buildAppointmentCard(
-                              appointments[index],
-                              () => editAppointment(
-                                index,
-                              ), // Edit appointment function
-                              () => deleteAppointment(
-                                index,
-                              ), // Delete appointment function
-                            );
-                          },
-                        ),
+          if (!_didLoadReminders) {
+            _didLoadReminders = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              loadReminders(currentPet.id!);
+            });
+          }
 
-                        SizedBox(height: 20),
+          return SingleChildScrollView(
+            // Scrollable content for pet profile
+            padding: EdgeInsets.all(16),
+            child: Column(
+              children: [
+                // Pet profile image
+                CircleAvatar(
+                  radius: 60,
+                  backgroundImage:
+                      currentPet.image != null
+                          ? (currentPet.image!.startsWith('http')
+                              ? NetworkImage(currentPet.image!)
+                              : FileImage(File(currentPet.image!))
+                                  as ImageProvider)
+                          : AssetImage('assets/images/dog.png'),
+                ),
+                SizedBox(height: 16),
+                // Pet name and breed/age info
+                Text(
+                  currentPet.name,
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                ),
+                Text('${currentPet.breed} • ${currentPet.age} years'),
+                SizedBox(height: 20),
 
-                        // Previous Medications section
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            'Previous Medications',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                // Reminders section with add button
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Reminders',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
                         ),
-                        // Display list of medications
-                        ListView.builder(
-                          shrinkWrap: true,
-                          itemCount: medications.length,
-                          itemBuilder: (context, index) {
-                            return _buildHistoryCard(
-                              medications[index],
-                              Icons.medical_services, // Medication icon
-                              () => deleteMedication(
-                                index,
-                              ), // Delete medication function
-                            );
-                          },
-                        ),
-
-                        // Vet History section
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            'Vet History',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        // Display list of vet histories
-                        ListView.builder(
-                          shrinkWrap: true,
-                          itemCount: vetHistories.length,
-                          itemBuilder: (context, index) {
-                            return _buildHistoryCard(
-                              vetHistories[index],
-                              Icons.healing, // Vet history icon
-                              () => deleteVetHistory(
-                                index,
-                              ), // Delete vet history function
-                            );
-                          },
-                        ),
-                      ],
-                    ),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.add),
+                        onPressed: () {
+                          addReminder(
+                            currentPet,
+                          ); // Trigger the add reminder function
+                        },
+                      ),
+                    ],
                   ),
-        );
-      },
+                ),
+                // Display list of reminders
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics:
+                      NeverScrollableScrollPhysics(), // Prevent scroll conflict
+                  itemCount: remindersTable.length,
+                  itemBuilder: (context, index) {
+                    return _buildReminderCard(
+                      remindersTable[index],
+                      () => editReminder(index),
+                      () => deleteReminder(index),
+                    );
+                  },
+                ),
+
+                SizedBox(height: 20),
+
+                // Appointments section with add button
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Appointments',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.add),
+                        onPressed: () {
+                          addAppointment(); // Trigger the add appointment function
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                // Display list of appointments
+                ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: appointments.length,
+                  itemBuilder: (context, index) {
+                    return _buildAppointmentCard(
+                      appointments[index],
+                      () => editAppointment(index), // Edit appointment function
+                      () => deleteAppointment(
+                        index,
+                      ), // Delete appointment function
+                    );
+                  },
+                ),
+
+                SizedBox(height: 20),
+
+                // Previous Medications section
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Previous Medications',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                // Display list of medications
+                ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: medications.length,
+                  itemBuilder: (context, index) {
+                    return _buildHistoryCard(
+                      medications[index],
+                      Icons.medical_services, // Medication icon
+                      () =>
+                          deleteMedication(index), // Delete medication function
+                    );
+                  },
+                ),
+
+                // Vet History section
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Vet History',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                // Display list of vet histories
+                ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: vetHistories.length,
+                  itemBuilder: (context, index) {
+                    return _buildHistoryCard(
+                      vetHistories[index],
+                      Icons.healing, // Vet history icon
+                      () => deleteVetHistory(
+                        index,
+                      ), // Delete vet history function
+                    );
+                  },
+                ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 }

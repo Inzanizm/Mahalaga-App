@@ -3,6 +3,7 @@ import 'package:mahalaga_app/data/notifiers.dart';
 import 'dart:io';
 
 import 'package:mahalaga_app/data/selected_pet_data.dart';
+import 'package:mahalaga_app/database/pet_table.dart';
 import 'package:mahalaga_app/views/pages/pet_page/pet_detail_screen.dart';
 
 class HomePage extends StatelessWidget {
@@ -54,7 +55,9 @@ class HomePage extends StatelessWidget {
                                   context,
                                   MaterialPageRoute(
                                     builder:
-                                        (context) => PetDetailScreen(pet: pet),
+                                        (context) => PetDetailScreen(
+                                          pet: PetTable.fromMap(pet),
+                                        ),
                                   ),
                                 );
                               },

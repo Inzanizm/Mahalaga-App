@@ -6,6 +6,8 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:mahalaga_app/data/notifiers.dart';
 import 'package:mahalaga_app/data/selected_pet_data.dart';
+import 'package:mahalaga_app/database/pet_table.dart';
+import 'package:mahalaga_app/database/pet_table_database.dart';
 import 'package:mahalaga_app/views/pages/pet_page/pet_detail_screen.dart';
 
 // Import package for calendar widget
@@ -23,6 +25,208 @@ class _PetProfileViewState extends State<PetProfileView> {
   final ImagePicker _picker =
       ImagePicker(); // Image picker instance for selecting pet images
   String searchQuery = ''; // String to hold the search query for filtering pets
+
+  final petTableDatabase =
+      PetTableDatabase(); // Database instance for pet table
+
+  final nameController = TextEditingController(); // Controller for pet's name
+  final speciesController =
+      TextEditingController(); // Controller for pet's species
+  final breedController = TextEditingController(); // Controller for pet's breed
+  final ageController = TextEditingController(); // Controller for pet's age
+  final statusController =
+      TextEditingController(); // Controller for pet's reproductive status
+  final weightController =
+      TextEditingController(); // Controller for pet's weight
+  final bloodController =
+      TextEditingController(); // Controller for pet's blood type
+  final allergyController =
+      TextEditingController(); // Controller for pet's allergies
+  final markController =
+      TextEditingController(); // Controller for pet's distinctive mark
+  XFile? pickedImage; // Variable to store picked image file
+
+  void addNewPetTable() {
+    final formKey = GlobalKey<FormState>();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              title: Center(
+                child: Text(
+                  'Add New Pet',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              content: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Form(
+                    key: formKey, // Attach form key for validation
+                    child: Column(
+                      children: [
+                        // Pet image picker
+                        Center(
+                          child: GestureDetector(
+                            onTap: () async {
+                              final image = await _picker.pickImage(
+                                source: ImageSource.gallery,
+                              ); // Pick image from gallery
+                              if (image != null) {
+                                setModalState(() {
+                                  pickedImage = image; // Update picked image
+                                });
+                              }
+                            },
+                            child: CircleAvatar(
+                              radius: 40,
+                              backgroundImage:
+                                  pickedImage != null
+                                      ? FileImage(
+                                        File(pickedImage!.path),
+                                      ) // Display selected image
+                                      : AssetImage('assets/images/dog.png')
+                                          as ImageProvider, // Default image
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        // Build text fields for various pet attributes
+                        _buildTextField(
+                          controller: nameController,
+                          label: 'Pet Name',
+                          icon: Icons.pets,
+                        ),
+                        const SizedBox(height: 12),
+                        _buildTextField(
+                          controller: speciesController,
+                          label: 'Species',
+                          icon: Icons.pets,
+                        ),
+                        const SizedBox(height: 12),
+                        _buildTextField(
+                          controller: breedController,
+                          label: 'Breed',
+                          icon: Icons.pets,
+                        ),
+                        const SizedBox(height: 12),
+                        _buildTextField(
+                          controller: ageController,
+                          label: 'Age (Years)',
+                          icon: Icons.cake,
+                          keyboardType: TextInputType.number,
+                        ),
+                        const SizedBox(height: 12),
+                        _buildTextField(
+                          controller: statusController,
+                          label: 'Reproductive Status',
+                          icon: Icons.favorite,
+                        ),
+                        const SizedBox(height: 12),
+                        _buildTextField(
+                          controller: weightController,
+                          label: 'Weight (kg)',
+                          icon: Icons.monitor_weight,
+                          keyboardType: TextInputType.number,
+                        ),
+                        const SizedBox(height: 12),
+                        _buildTextField(
+                          controller: bloodController,
+                          label: 'Blood Type',
+                          icon: Icons.bloodtype,
+                        ),
+                        const SizedBox(height: 12),
+                        _buildTextField(
+                          controller: allergyController,
+                          label: 'Allergies',
+                          icon: Icons.warning,
+                          required: false,
+                        ),
+                        const SizedBox(height: 12),
+                        _buildTextField(
+                          controller: markController,
+                          label: 'Distinctive Mark',
+                          icon: Icons.local_offer,
+                          required: false,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              actions: [
+                OverflowBar(
+                  alignment: MainAxisAlignment.end,
+                  children: [
+                    // Cancel button to close dialog without saving
+                    TextButton(
+                      onPressed: () => Navigator.pop(dialogContext),
+                      child: const Text('Cancel'),
+                    ),
+                    // Add button to save the new pet
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.teal,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      onPressed: () async {
+                        if (formKey.currentState!.validate()) {
+                          final newPet = PetTable(
+                            name: nameController.text.trim(),
+                            species: speciesController.text.trim(),
+                            breed: breedController.text.trim(),
+                            age: int.tryParse(ageController.text.trim()) ?? 0,
+                            status: statusController.text.trim(),
+                            weight:
+                                int.tryParse(weightController.text.trim()) ?? 0,
+                            blood: bloodController.text.trim(),
+                            allergy: allergyController.text.trim(),
+                            mark: markController.text.trim(),
+                            image: pickedImage?.path,
+                          );
+
+                          await petTableDatabase.createPetTable(
+                            newPet,
+                          ); //  Save new pet to database
+
+                          Navigator.pop(dialogContext); // Close dialog
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              behavior: SnackBarBehavior.floating,
+                              margin: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 10,
+                              ),
+                              backgroundColor: Colors.teal,
+                              content: Text(
+                                '${nameController.text} has been added!',
+                                style: const TextStyle(color: Colors.white),
+                              ),
+                              duration: const Duration(seconds: 3),
+                            ),
+                          );
+                        }
+                      },
+                      child: const Text('Add'),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
 
   // Method to add a new pet
   void _addNewPet() {
@@ -272,12 +476,22 @@ class _PetProfileViewState extends State<PetProfileView> {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        ValueListenableBuilder<List<Map<String, dynamic>>>(
-          valueListenable: petListNotifier,
-          builder: (context, pets, _) {
+        StreamBuilder<List<PetTable>>(
+          stream: petTableDatabase.stream,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            if (snapshot.hasError) {
+              return Center(child: Text('Error loading pets'));
+            }
+
+            final pets = snapshot.data ?? [];
+
             final filteredPets =
                 pets.where((pet) {
-                  final name = (pet['name'] ?? '').toLowerCase();
+                  final name = pet.name.toLowerCase();
                   return name.contains(searchQuery);
                 }).toList();
 
@@ -288,8 +502,8 @@ class _PetProfileViewState extends State<PetProfileView> {
                   pinned: true,
                   backgroundColor: Colors.teal,
                   elevation: 0,
-                  title: Padding(
-                    padding: EdgeInsets.only(top: 7, bottom: 0),
+                  title: const Padding(
+                    padding: EdgeInsets.only(top: 7),
                     child: Text(
                       'Pet Profile',
                       style: TextStyle(
@@ -302,17 +516,11 @@ class _PetProfileViewState extends State<PetProfileView> {
                   bottom: PreferredSize(
                     preferredSize: const Size.fromHeight(75),
                     child: Padding(
-                      padding: const EdgeInsets.only(
-                        top: 0,
-                        left: 6,
-                        right: 6,
-                        bottom: 6,
-                      ),
+                      padding: const EdgeInsets.all(6),
                       child: TextField(
                         onChanged: (value) {
                           setState(() {
-                            searchQuery =
-                                value.toLowerCase(); // Update search query
+                            searchQuery = value.toLowerCase();
                           });
                         },
                         decoration: InputDecoration(
@@ -322,7 +530,7 @@ class _PetProfileViewState extends State<PetProfileView> {
                           fillColor: Colors.white,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: Colors.teal),
+                            borderSide: const BorderSide(color: Colors.teal),
                           ),
                         ),
                       ),
@@ -332,8 +540,8 @@ class _PetProfileViewState extends State<PetProfileView> {
                 SliverList(
                   delegate: SliverChildListDelegate([
                     if (pets.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.all(40.0),
+                      const Padding(
+                        padding: EdgeInsets.all(40.0),
                         child: Text(
                           'You have no pets yet.\nAdd one to get started!',
                           textAlign: TextAlign.center,
@@ -341,8 +549,8 @@ class _PetProfileViewState extends State<PetProfileView> {
                         ),
                       )
                     else if (filteredPets.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.all(40.0),
+                      const Padding(
+                        padding: EdgeInsets.all(40.0),
                         child: Text(
                           'No pets found matching your search.',
                           textAlign: TextAlign.center,
@@ -353,13 +561,12 @@ class _PetProfileViewState extends State<PetProfileView> {
                       ...filteredPets.map((pet) {
                         return GestureDetector(
                           onTap: () {
-                            SelectedPetData.selectedPet =
-                                pet; // Set the selected pet data
+                            SelectedPetData.selectedPet = pet.toMap();
                             Navigator.push(
                               context,
                               MaterialPageRoute(
                                 builder: (context) => PetDetailScreen(pet: pet),
-                              ), // Navigate to pet detail screen
+                              ),
                             );
                           },
                           child: Card(
@@ -375,7 +582,6 @@ class _PetProfileViewState extends State<PetProfileView> {
                               padding: const EdgeInsets.all(20),
                               child: Column(
                                 children: [
-                                  // Pet image and information
                                   Row(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.center,
@@ -383,8 +589,8 @@ class _PetProfileViewState extends State<PetProfileView> {
                                       CircleAvatar(
                                         radius: 40,
                                         backgroundImage:
-                                            pet['image'] != null
-                                                ? FileImage(File(pet['image']))
+                                            pet.image != null
+                                                ? FileImage(File(pet.image!))
                                                 : const AssetImage(
                                                       'assets/images/dog.png',
                                                     )
@@ -397,7 +603,7 @@ class _PetProfileViewState extends State<PetProfileView> {
                                               CrossAxisAlignment.start,
                                           children: [
                                             Text(
-                                              pet['name'],
+                                              pet.name,
                                               style: TextStyle(
                                                 fontSize: 22,
                                                 fontWeight: FontWeight.bold,
@@ -406,7 +612,7 @@ class _PetProfileViewState extends State<PetProfileView> {
                                             ),
                                             const SizedBox(height: 4),
                                             Text(
-                                              '${pet['breed']} • ${pet['age']} years old',
+                                              '${pet.breed} • ${pet.age} years old',
                                               style: TextStyle(
                                                 color: Colors.grey.shade700,
                                               ),
@@ -441,37 +647,27 @@ class _PetProfileViewState extends State<PetProfileView> {
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      // Display health details for each pet
-                                      if ((pet['species'] ?? '').isNotEmpty)
-                                        _healthDetailLine(
-                                          "Species",
-                                          pet['species'],
-                                        ),
-                                      if ((pet['status'] ?? '').isNotEmpty)
-                                        _healthDetailLine(
-                                          "Reproductive Status",
-                                          pet['status'],
-                                        ),
-                                      if ((pet['weight'] ?? '').isNotEmpty)
-                                        _healthDetailLine(
-                                          "Weight",
-                                          pet['weight'],
-                                        ),
-                                      if ((pet['blood'] ?? '').isNotEmpty)
-                                        _healthDetailLine(
-                                          "Blood Type",
-                                          pet['blood'],
-                                        ),
-                                      if ((pet['allergy'] ?? '').isNotEmpty)
-                                        _healthDetailLine(
-                                          "Allergies",
-                                          pet['allergy'],
-                                        ),
-                                      if ((pet['mark'] ?? '').isNotEmpty)
-                                        _healthDetailLine(
-                                          "Distinctive Mark",
-                                          pet['mark'],
-                                        ),
+                                      _healthDetailLine("Species", pet.species),
+                                      _healthDetailLine(
+                                        "Reproductive Status",
+                                        pet.status,
+                                      ),
+                                      _healthDetailLine(
+                                        "Weight",
+                                        pet.weight.toString(),
+                                      ),
+                                      _healthDetailLine(
+                                        "Blood Type",
+                                        pet.blood,
+                                      ),
+                                      _healthDetailLine(
+                                        "Allergies",
+                                        pet.allergy,
+                                      ),
+                                      _healthDetailLine(
+                                        "Distinctive Mark",
+                                        pet.mark,
+                                      ),
                                     ],
                                   ),
                                 ],
@@ -492,8 +688,8 @@ class _PetProfileViewState extends State<PetProfileView> {
           right: 16,
           child: FloatingActionButton(
             backgroundColor: Colors.teal,
-            onPressed: _addNewPet,
-            child: Icon(Icons.add),
+            onPressed: addNewPetTable,
+            child: const Icon(Icons.add),
           ),
         ),
       ],
