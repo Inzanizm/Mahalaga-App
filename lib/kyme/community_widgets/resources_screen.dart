@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
+
+
 class ResourcePost {
   final String tag;
   final String content;
-  final String? mediaUrl; // Can be YouTube or image URL
+  final String? mediaUrl;
   final bool isYouTube;
 
   ResourcePost({
@@ -20,18 +22,22 @@ class ResourcesScreen extends StatelessWidget {
     ResourcePost(
       tag: '#TherianClub',
       content: 'Awwww this cat is realll really super duper cute i love this cat so much i want it.',
-      mediaUrl: 'https://img.freepik.com/premium-photo/cat-grey-wooden-background_902049-17090.jpg',
+      mediaUrl: 'https://cdn-useast1.kapwing.com/static/templates/crying-cat-meme-template-full-719a53dc.webp',
     ),
     ResourcePost(
       tag: '#ThePetArticle',
-      content: 'Look at the latest pet news\nwww://http//hdahdad/The nub pet??//.com',
-      mediaUrl: 'https://i.ytimg.com/vi/YE7VzlLtp-4/maxresdefault.jpg',
+      content: 'Look at the latest pet news\nhttps://www.philstar.com/lifestyle/pet-life/2025/04/29/2439216/rise-yoghurt-based-wet-food-cats-and-dogs',
+      mediaUrl: 'https://media.philstar.com/photos/2025/04/29/petmarra-lead_2025-04-29_11-20-40.jpg',
     ),
     ResourcePost(
       tag: '#YouTubePets',
-      content: 'Check out this video about training puppies!',
-      mediaUrl: 'https://www.youtube.com/watch?v=YE7VzlLtp-4',
+      content: 'Check out this video about training dogs!',
+      mediaUrl: 'https://youtu.be/jFMA5ggFsXU?si=xtak9zL375DF2dO6',
       isYouTube: true,
+
+
+
+
     ),
   ];
 

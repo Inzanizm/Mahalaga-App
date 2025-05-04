@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:mahalaga_app/kyme/community_widgets/channel_forum_screen.dart';
-import 'package:mahalaga_app/kyme/community_widgets/chat_screen.dart';
+import 'package:mahalaga_app/kyme/community_widgets/chats_screen.dart';
 import 'package:mahalaga_app/kyme/community_widgets/create_post_screen.dart';
 import 'package:mahalaga_app/kyme/community_widgets/hotline_screen.dart';
+import 'package:mahalaga_app/kyme/community_widgets/news_screen.dart';
 import 'package:mahalaga_app/kyme/community_widgets/resources_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:timeago/timeago.dart' as timeago;
+import 'package:marquee/marquee.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -37,7 +40,6 @@ class _CommunityForumScreenState extends State<CommunityForumScreen> {
   void initState() {
     super.initState();
     loadData();
-    loadCommunities();
   }
 
   Future<void> loadData() async {
@@ -51,8 +53,11 @@ class _CommunityForumScreenState extends State<CommunityForumScreen> {
   Future<void> loadTags() async {
     try {
       final res = await supabase
-          .from('mahalaga_pca_comfor.posts')
+          .schema('mahalaga_pca_comfor')
+          .from('posts')
           .select('content');
+
+      debugPrint('Tags response: $res'); // Log the response
 
       final tagSet = <String>{};
       for (var post in res) {
@@ -64,29 +69,45 @@ class _CommunityForumScreenState extends State<CommunityForumScreen> {
         }
       }
 
-      allTags = tagSet.toList();
-    } catch (_) {
-      allTags = [
-        "Cat",
-        "Dogs",
-        "Hamster",
-        "Fish",
-        "BullDog",
-        "Birds",
-        "Food",
-        "Med",
-      ];
+      setState(() {
+        allTags = tagSet.toList();
+      });
+    } catch (e) {
+      setState(() {
+        allTags = [
+          "Cat",
+          "Dogs",
+          "Hamster",
+          "Fish",
+          "BullDog",
+          "Birds",
+          "Food",
+          "Med",
+        ];
+      });
     }
   }
 
   Future<void> loadPosts() async {
     try {
       final res = await supabase
-          .from('mahalaga_pca_comfor.posts')
-          .select('id, content, created_at, user_id, media_urls')
+          .schema('mahalaga_pca_comfor')
+          .from('posts')
+          .select(
+            'id, content, created_at, user_id, media_urls, post_title, community_id(name), user_id(username)',
+          )
           .order('created_at', ascending: false);
+      debugPrint('haotdog from Supabase: $res');
 
-      posts = res;
+      // Map username from nested user_id if available
+      posts =
+          res.map<Map<String, dynamic>>((post) {
+            final username =
+                post['user_id'] is Map && post['user_id'] != null
+                    ? post['user_id']['username']
+                    : null;
+            return {...post, 'username': username};
+          }).toList();
     } catch (_) {
       posts = List.generate(
         5,
@@ -96,6 +117,8 @@ class _CommunityForumScreenState extends State<CommunityForumScreen> {
           'media_urls': [],
           'created_at': DateTime.now().toIso8601String(),
           'user_id': 'user_$i',
+          'username': 'DummyUser$i',
+          'post_title': 'Dummy Post Title $i',
         },
       );
     }
@@ -104,21 +127,48 @@ class _CommunityForumScreenState extends State<CommunityForumScreen> {
   Future<void> loadNews() async {
     try {
       final res = await supabase
-          .from('mahalaga_pca_comfor.featured_news')
-          .select('title, image_url, published_at');
+          .schema('mahalaga_pca_comfor')
+          .from('featured_news')
+          .select('title, image_url, writer, body, published_at');
 
-      featuredNews = res;
-    } catch (_) {
+      debugPrint('Raw Supabase news response: $res');
+
+      if (res.isNotEmpty) {
+        featuredNews = res;
+      } else {
+        debugPrint('News is empty, using fallback');
+        featuredNews = [
+          {
+            'title': 'Sample News Title',
+            'image_url': 'https://placedog.net/400/300',
+            'body': 'Sample news body content.',
+            'published_at': DateTime.now().toIso8601String(),
+          },
+          {
+            'title': 'Another Sample News Title',
+            'image_url': 'https://placedog.net/400/300',
+            'body': 'Another sample news body content.',
+            'published_at': DateTime.now().toIso8601String(),
+          },
+        ]; // fallback data
+      }
+    } catch (e, stack) {
+      debugPrint('Error loading news: $e');
+      debugPrint('Stack trace: $stack');
       featuredNews = [
         {
-          'title': 'Pet Adoption Drive!',
-          'image_url': 'https://placedog.net/640/480',
+          'title': 'Sample News Title',
+          'image_url': 'https://placedog.net/400/300',
+          'body': 'Sample news body content.',
+          'published_at': DateTime.now().toIso8601String(),
         },
         {
-          'title': 'Healthy Pet Tips',
-          'image_url': 'https://placedog.net/640/481',
+          'title': 'Another Sample News Title',
+          'image_url': 'https://placedog.net/400/300',
+          'body': 'Another sample news body content.',
+          'published_at': DateTime.now().toIso8601String(),
         },
-      ];
+      ]; // fallback data
     }
   }
 
@@ -170,7 +220,8 @@ class _CommunityForumScreenState extends State<CommunityForumScreen> {
   Future<int> getReactionCount(String postId) async {
     try {
       final res = await supabase
-          .from('mahalaga_pca_comfor.post_reacts')
+          .schema('mahalaga_pca_comfor')
+          .from('post_reacts')
           .select('id')
           .eq('post_id', postId)
           .count(CountOption.exact);
@@ -184,19 +235,21 @@ class _CommunityForumScreenState extends State<CommunityForumScreen> {
   Future<void> toggleReaction(String postId) async {
     final userId = supabase.auth.currentUser?.id;
     final res = await supabase
-        .from('mahalaga_pca_comfor.post_reacts')
+        .schema('mahalaga_pca_comfor')
+        .from('post_reacts')
         .select()
         .eq('post_id', postId)
         .eq('user_id', userId!);
 
     if (res.isNotEmpty) {
       await supabase
-          .from('mahalaga_pca_comfor.post_reacts')
+          .schema('mahalaga_pca_comfor')
+          .from('post_reacts')
           .delete()
           .eq('post_id', postId)
           .eq('user_id', userId);
     } else {
-      await supabase.from('mahalaga_pca_comfor.post_reacts').insert({
+      await supabase.schema('mahalaga_pca_comfor').from('post_reacts').insert({
         'post_id': postId,
         'user_id': userId,
       });
@@ -208,11 +261,10 @@ class _CommunityForumScreenState extends State<CommunityForumScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Color(0xFFa7a28c),
-
+      backgroundColor: const Color(0xFF9B9982),
       appBar: AppBar(
+        backgroundColor: const Color(0xFF6B705C),
         title: const Text('Community Forum'),
-        backgroundColor: Color(0xFF7d7b6c),
       ),
       body:
           isLoading
@@ -289,32 +341,51 @@ class _CommunityForumScreenState extends State<CommunityForumScreen> {
         itemCount: featuredNews.length,
         itemBuilder: (_, index) {
           final news = featuredNews[index];
-          return Card(
-            clipBehavior: Clip.hardEdge,
-            child: Stack(
-              children: [
-                Image.network(
-                  news['image_url'],
-                  width: double.infinity,
-                  height: 180,
-                  fit: BoxFit.cover,
-                ),
-                Positioned(
-                  bottom: 0,
-                  child: Container(
-                    width: MediaQuery.of(context).size.width,
-                    padding: const EdgeInsets.all(12),
-                    color: Colors.black.withAlpha(150),
-                    child: Text(
-                      news['title'],
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
+          return GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => NewsScreen(news: news)),
+              );
+            },
+            child: Card(
+              clipBehavior: Clip.hardEdge,
+              child: Stack(
+                children: [
+                  Image.network(
+                    news['image_url'],
+                    width: double.infinity,
+                    height: 180,
+                    fit: BoxFit.cover,
+                  ),
+                  Positioned(
+                    bottom: 0,
+                    child: Container(
+                      width: MediaQuery.of(context).size.width,
+                      padding: const EdgeInsets.all(5),
+                      color: Colors.black.withAlpha(120),
+                      child: Container(
+                        width: MediaQuery.of(context).size.width,
+                        height: 30, // ← give it a fixed height
+                        padding: const EdgeInsets.all(0),
+                        color: Colors.transparent,
+                        child: Marquee(
+                          text: news['title'],
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
+                          blankSpace: 50.0,
+                          velocity: 30.0,
+                          pauseAfterRound: Duration(seconds: 1),
+                          startPadding: 35.0,
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           );
         },
@@ -332,22 +403,62 @@ class _CommunityForumScreenState extends State<CommunityForumScreen> {
             String shortDesc = isLong ? '${desc.substring(0, 60)}...' : desc;
 
             return Card(
+              color: const Color(0xfFb7b7a4),
               child: ListTile(
+                leading:
+                    comm['chanIMG_Url'] != null
+                        ? Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.green.shade700,
+                              width: 2,
+                            ),
+                          ),
+                          child: CircleAvatar(
+                            backgroundImage: NetworkImage(comm['chanIMG_Url']),
+                            radius: 20,
+                            backgroundColor: Colors.transparent,
+                          ),
+                        )
+                        : Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Color.fromARGB(255, 144, 148, 133),
+                              width: 2,
+                            ),
+                          ),
+                          child: const CircleAvatar(
+                            backgroundColor: Color.fromARGB(255, 199, 199, 192),
+                            radius: 20,
+                            child: Icon(Icons.group),
+                          ),
+                        ),
+                onTap:
+                    () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder:
+                            (_) => ChannelForumScreen(
+                              communityName: comm['name'],
+
+                              description: desc,
+                            ), // Replace with actual community screen
+                      ),
+                    ),
+
                 contentPadding: const EdgeInsets.symmetric(
                   vertical: 8,
                   horizontal: 16,
                 ),
-                leading:
-                    comm['chanIMG_Url'] != null
-                        ? CircleAvatar(
-                          backgroundImage: NetworkImage(comm['chanIMG_Url']),
-                          radius: 24,
-                        )
-                        : const CircleAvatar(
-                          radius: 24,
-                          child: Icon(Icons.group),
-                        ),
+
                 title: Text(comm['name']),
+                titleTextStyle: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black54,
+                ),
                 subtitle: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -380,6 +491,13 @@ class _CommunityForumScreenState extends State<CommunityForumScreen> {
                   ],
                 ),
                 trailing: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xfFb7b7a4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                  ),
                   onPressed:
                       () => Navigator.push(
                         context,
@@ -401,20 +519,101 @@ class _CommunityForumScreenState extends State<CommunityForumScreen> {
 
   Widget _buildPostCard(Map<String, dynamic> post) {
     final postId = post['id'];
+    final mediaUrl = post['media_urls'];
+    final createdAt = DateTime.tryParse(post['created_at'] ?? '');
+    final communityName = post['community_id']?['name'] ?? 'Unknown Community';
 
     return FutureBuilder<int>(
       future: getReactionCount(postId),
       builder: (context, snapshot) {
         final pawCount = snapshot.data ?? 0;
         return Card(
-          margin: const EdgeInsets.symmetric(vertical: 8),
+          color: const Color(0xfFb7b7a4),
+          margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          elevation: 2,
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(post['content'], style: const TextStyle(fontSize: 16)),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "@${post['username'] ?? 'Unknown User'}",
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    if (createdAt != null)
+                      Text(
+                        timeago.format(createdAt),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.black38,
+                        ),
+                      ),
+                  ],
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.start,
+
+                  children: [
+                    const Icon(Icons.pets, size: 12, color: Color(0xFF6B705C)),
+                    Text(
+                      communityName,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF6B705C),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Text(
+                      post['post_title'] ?? '',
+                      style: const TextStyle(
+                        fontSize: 17,
+                        color: Colors.black54,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+
+                // Post content
+                Text(
+                  post['content'] ?? '',
+                  style: const TextStyle(fontSize: 16, height: 1.4),
+                ),
+
+                // Media preview (if any)
+                if (mediaUrl != null &&
+                    mediaUrl.isNotEmpty &&
+                    mediaUrl[0].toString().isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      mediaUrl[0].toString(),
+                      height: 200,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ],
+
                 const SizedBox(height: 10),
+
+                // Reactions and comments row
                 Row(
                   children: [
                     IconButton(
@@ -475,7 +674,8 @@ class _CommunityForumScreenState extends State<CommunityForumScreen> {
           Expanded(
             child: FutureBuilder<List>(
               future: supabase
-                  .from('mahalaga_pca_comfor.post_comments')
+                  .schema('mahalaga_pca_comfor')
+                  .from('post_comments')
                   .select()
                   .eq('post_id', postId)
                   .order('created_at'),
@@ -530,7 +730,8 @@ class _CommunityForumScreenState extends State<CommunityForumScreen> {
                   }
 
                   await supabase
-                      .from('mahalaga_pca_comfor.post_comments')
+                      .schema('mahalaga_pca_comfor')
+                      .from('post_comments')
                       .insert({
                         'post_id': postId,
                         'user_id': userId,
@@ -565,7 +766,7 @@ class _CommunityForumScreenState extends State<CommunityForumScreen> {
           ],
           FloatingActionButton(
             shape: const CircleBorder(),
-            backgroundColor: Colors.green,
+            backgroundColor: const Color.fromARGB(255, 128, 148, 129),
             onPressed: () => setState(() => isDropdownOpen = !isDropdownOpen),
             child: Icon(isDropdownOpen ? Icons.close : Icons.menu),
           ),
@@ -579,7 +780,7 @@ class _CommunityForumScreenState extends State<CommunityForumScreen> {
       shape: const CircleBorder(),
       heroTag: label,
       mini: true,
-      backgroundColor: Colors.green.shade700,
+      backgroundColor: Color(0xFF9B9982),
       onPressed: () {
         Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
       },

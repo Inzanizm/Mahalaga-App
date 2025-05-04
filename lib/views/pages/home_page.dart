@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:mahalaga_app/data/selected_pet_data.dart';
 import 'package:mahalaga_app/database/pet_table.dart';
+import 'package:mahalaga_app/views/pages/pet_page/pet_adoption_page.dart';
 import 'package:mahalaga_app/views/pages/pet_page/pet_detail_screen.dart';
 
 class HomePage extends StatelessWidget {
@@ -271,7 +272,14 @@ class HomePage extends StatelessWidget {
                                 const SizedBox(height: 4),
                                 ElevatedButton(
                                   onPressed: () {
-                                    // TODO: Adopt functionality
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder:
+                                            (context) =>
+                                                const PetAdoptionPage(),
+                                      ),
+                                    );
                                   },
 
                                   style: ElevatedButton.styleFrom(

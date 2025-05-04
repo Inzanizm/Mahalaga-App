@@ -42,13 +42,13 @@ class _AddPetPageState extends State<AddPetPage> {
     if (_formKey.currentState!.validate()) {
       // Collecting data from the form fields
       final petName = _nameController.text;
-      final petBreed = _breedController.text;
-      final petAge = _ageController.text;
-      final petGender = _genderController.text;
-      final petWeight = _weightController.text;
-      final petLocation = _locationController.text;
-      final petAbout = _aboutController.text;
-      final petStatus = _statusController.text;
+      // final petBreed = _breedController.text;
+      // final petAge = _ageController.text;
+      // final petGender = _genderController.text;
+      // final petWeight = _weightController.text;
+      // final petLocation = _locationController.text;
+      // final petAbout = _aboutController.text;
+      // final petStatus = _statusController.text;
 
       // Add your pet submission logic here (e.g., saving data to a database)
 

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:mahalaga_app/data/notifiers.dart';
+import 'package:mahalaga_app/kyme/community_widgets/community_forum_screen.dart';
+import 'package:mahalaga_app/kyme/map_screen.dart';
 import 'package:mahalaga_app/views/auth_service.dart';
 import 'package:mahalaga_app/views/pages/calendar_page.dart';
 import 'package:mahalaga_app/views/pages/home_page.dart';
-import 'package:mahalaga_app/views/pages/menu_page.dart';
+import 'package:mahalaga_app/views/pages/login_screen.dart';
 import 'package:mahalaga_app/views/pages/pet_page/pet_adoption_page.dart';
 import 'package:mahalaga_app/views/pages/pet_page/pet_profile_view.dart';
 
@@ -35,9 +37,9 @@ class _WidgetTreeState extends State<WidgetTree> {
   Widget _getMenuTabContent() {
     if (showMenuSubNav) {
       // Replace with your desired sub-page widgets
-      return Center(child: Text("Sub-page content here"));
+      return MapScreen();
     }
-    return MenuPage(); // Default MenuPage content
+    return CommunityForumScreen(); // Default MenuPage content
   }
 
   @override
@@ -62,7 +64,40 @@ class _WidgetTreeState extends State<WidgetTree> {
               },
             ),
           ),
-          IconButton(onPressed: logout, icon: Icon(Icons.logout)),
+          IconButton(
+            onPressed: () async {
+              final shouldLogout = await showDialog<bool>(
+                context: context,
+                builder:
+                    (context) => AlertDialog(
+                      title: const Text('Confirm Logout'),
+                      content: const Text('Are you sure you want to log out?'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(false),
+                          child: const Text('Cancel'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(true),
+                          child: const Text('Logout'),
+                        ),
+                      ],
+                    ),
+              );
+
+              if (shouldLogout == true) {
+                logout();
+                if (context.mounted) {
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(
+                      builder: (context) => const LoginScreen(),
+                    ),
+                  );
+                }
+              }
+            },
+            icon: Icon(Icons.logout),
+          ),
         ],
       ),
       body: Column(

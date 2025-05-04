@@ -27,7 +27,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   Future<void> fetchCommunities() async {
     try {
       final res = await Supabase.instance.client
-          .from('mahalaga_pca_comfor.communities')
+        .schema('mahalaga_pca_comfor')
+          .from('communities')
           .select('id, name');
 
       if (mounted) {
@@ -90,10 +91,12 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       }
     }
 
-    await Supabase.instance.client.from('mahalaga_pca_comfor.posts').insert({
+    await Supabase.instance.client.schema('mahalaga_pca_comfor').from('posts').insert({
       'user_id': userId,
       'content': _bodyController.text,
+      'post_title': _titleController.text,
       'media_urls': mediaUrls,
+      'community_id': _selectedCommunityId,
     });
 
     if (mounted) Navigator.pop(context);
@@ -108,9 +111,10 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         leading: BackButton(color: Colors.white),
         title: DropdownButtonHideUnderline(
           child: DropdownButton<String>(
+            iconEnabledColor: Colors.white,
             value: _selectedCommunityId,
-            hint: const Text('Group', style: TextStyle(color: Colors.white)),
-            dropdownColor: Colors.grey.shade800,
+            hint: const Text('Selected Group', style: TextStyle(color: Colors.white)),
+            dropdownColor: const Color.fromARGB(255, 172, 170, 170),
             items: _communities.map((comm) {
               return DropdownMenuItem<String>(
                 value: comm['id'],
@@ -151,13 +155,13 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             Row(
               children: [
                 IconButton(
-                  icon: const Icon(Icons.camera_alt, color: Colors.white),
+                  icon: const Icon(Icons.camera_alt, color: Color(0xFF9B9982), size: 35,),
                   onPressed: pickMedia,
                 ),
                 const Spacer(),
                 ElevatedButton(
                   onPressed: submitPost,
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade700),
+                  style: ElevatedButton.styleFrom(backgroundColor: Color(0xFF9B9982)),
                   child: const Text('Post'),
                 ),
               ],

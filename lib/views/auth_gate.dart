@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:mahalaga_app/views/pages/welcome_page.dart';
+import 'package:mahalaga_app/views/pages/login_screen.dart';
 import 'package:mahalaga_app/views/widget_tree.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -22,7 +22,7 @@ class AuthGate extends StatelessWidget {
         if (session != null) {
           return WidgetTree();
         } else {
-          return WelcomePage();
+          return LoginScreen();
         }
       },
     );

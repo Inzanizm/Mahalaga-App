@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:mahalaga_app/views/pages/login_screen.dart';
+import 'package:mahalaga_app/views/auth_gate.dart';
 import 'package:video_player/video_player.dart';
 
 class VideoSplashScreen extends StatefulWidget {
@@ -24,7 +24,7 @@ class _VideoSplashScreenState extends State<VideoSplashScreen> {
     _controller.addListener(() {
       if (_controller.value.position == _controller.value.duration) {
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          MaterialPageRoute(builder: (context) => const AuthGate()),
         );
       }
     });

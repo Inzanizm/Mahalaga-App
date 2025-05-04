@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mahalaga_app/data/notifiers.dart';
-import 'package:mahalaga_app/views/auth_gate.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-// import 'package:mahalaga_app/views/screens/video_splash_screen.dart';
+import 'package:mahalaga_app/views/screens/video_splash_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized(); // IMPORTANT! ITO YUNG LINE NA NAMALI KO KAYA NAWASTE YUNG ILANG ORAS KO T^T
@@ -37,7 +36,7 @@ class MyApp extends StatelessWidget {
           //     brightness: isDarkMode ? Brightness.dark : Brightness.light,
           //   ),
           // ),
-          home: AuthGate(),
+          home: VideoSplashScreen(),
         );
       },
     );

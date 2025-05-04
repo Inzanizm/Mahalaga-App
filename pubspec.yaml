@@ -50,6 +50,8 @@ dependencies:
   flutter_typeahead: ^5.2.0
   youtube_player_flutter: ^9.1.1
   flutter_rating_bar: ^4.0.0
+  timeago: ^3.2.2
+  marquee: ^2.2.3
 
 dev_dependencies:
   flutter_test:
