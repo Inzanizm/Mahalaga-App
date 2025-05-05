@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mahalaga_app/data/notifiers.dart';
+import 'package:mahalaga_app/data/selected_pet_data.dart';
 import 'package:mahalaga_app/kyme/community_widgets/community_forum_screen.dart';
 import 'package:mahalaga_app/kyme/map_screen.dart';
 import 'package:mahalaga_app/views/auth_service.dart';
@@ -22,16 +23,33 @@ class _WidgetTreeState extends State<WidgetTree> {
   bool isViewProfileSelected = false; // Controls if Pet Info Card is shown
   bool showAdoptionPage =
       false; // Controls if PetAdoptionPage is shown instead of PetProfileView
-  bool showMenuSubNav = false; // Controls if Menu sub-navigation is shown
+  bool showMenuSubNav = false;
+  
+get pet => SelectedPetData.selectedPetNotifier.value;
 
   void logout() async {
     await authService.signOut();
   }
 
   // Determines what to show on the Pet tab (either profile or adoption page)
-  Widget _getPetTabContent() {
-    return showAdoptionPage ? PetAdoptionPage() : PetProfileView();
+Widget _getPetTabContent() {
+  final pet = SelectedPetData.selectedPetNotifier.value;
+
+  if (showAdoptionPage) return PetAdoptionPage();
+
+  if (pet == null) {
+    return Center(
+      child: Text(
+        'No pet selected.\nTap the "+" icon to add one.',
+        textAlign: TextAlign.center,
+        style: TextStyle(color: Colors.grey.shade600),
+      ),
+    );
   }
+
+  return PetProfileView(pet: pet);
+}
+
 
   // Determines what to show on the Menu tab
   Widget _getMenuTabContent() {

@@ -6,13 +6,59 @@ import 'package:mahalaga_app/data/selected_pet_data.dart';
 import 'package:mahalaga_app/database/pet_table.dart';
 import 'package:mahalaga_app/views/pages/pet_page/pet_adoption_page.dart';
 import 'package:mahalaga_app/views/pages/pet_page/pet_detail_screen.dart';
+import 'package:mahalaga_app/views/pages/pet_page/pet_details_page.dart';
+import 'package:mahalaga_app/views/pages/pet_page/pet_profile_view.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
   @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  Future<List<Map<String, dynamic>>> fetchAdoptablePets() async {
+    final supabase = Supabase.instance.client;
+    final response = await supabase
+        .from('adoptable_pets')
+        .select()
+        .eq('status', 'Available')
+        .order('created_at', ascending: false)
+        .limit(5);
+
+    if (response.isEmpty) {
+      return []; // fallback for empty list
+    }
+
+    return List<Map<String, dynamic>>.from(response);
+  }
+
+  Future<Map<String, dynamic>?> fetchFirstPet() async {
+    final response =
+        await Supabase.instance.client
+            .from('pet_table')
+            .select()
+            .limit(1)
+            .maybeSingle();
+
+    return response;
+  }
+
+  Future<void> loadPets() async {
+    final response = await Supabase.instance.client.from('pet_table').select();
+
+    petListNotifier.value = List<Map<String, dynamic>>.from(response);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    void showPetSelectorDialog(BuildContext context) {
+    void showPetSelectorDialog(BuildContext context) async {
+      final response =
+          await Supabase.instance.client.from('pet_table').select();
+
+      petListNotifier.value = List<Map<String, dynamic>>.from(response);
+
       showDialog(
         context: context,
         builder: (BuildContext dialogContext) {
@@ -51,17 +97,45 @@ class HomePage extends StatelessWidget {
                           pets.map((pet) {
                             return GestureDetector(
                               onTap: () {
-                                SelectedPetData.selectedPet = pet;
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder:
-                                        (context) => PetDetailScreen(
-                                          pet: PetTable.fromMap(pet),
-                                        ),
+                                final selectedPet = PetTable.fromMap(pet);
+                                SelectedPetData.selectedPetNotifier.value =
+                                    selectedPet;
+                                selectedPet;
+
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      '${selectedPet.name} has been added!',
+                                    ),
                                   ),
                                 );
+
+                                Navigator.pop(
+                                  dialogContext,
+                                ); // Close the dialog first
+
+                                // Then navigate after the dialog closes
+                                Future.delayed(Duration.zero, () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder:
+                                          (context) =>
+                                              PetProfileView(pet: selectedPet),
+                                    ),
+                                  );
+                                });
+
+                                // Navigator.push(
+                                //   context,
+                                //   MaterialPageRoute(
+                                //     builder:
+                                //         (context) =>
+                                //             PetProfileView(pet: selectedPet),
+                                //   ),
+                                // );
                               },
+
                               child: Card(
                                 margin: const EdgeInsets.symmetric(
                                   horizontal: 8,
@@ -81,12 +155,19 @@ class HomePage extends StatelessWidget {
                                         radius: 40,
                                         backgroundImage:
                                             pet['image'] != null
-                                                ? FileImage(File(pet['image']))
-                                                : const AssetImage(
-                                                      'assets/images/dog.png',
+                                                ? (pet['image'].startsWith(
+                                                      'http',
                                                     )
-                                                    as ImageProvider,
+                                                    ? NetworkImage(pet['image'])
+                                                        as ImageProvider
+                                                    : FileImage(
+                                                      File(pet['image']),
+                                                    ))
+                                                : const AssetImage(
+                                                  'assets/images/dog.png',
+                                                ),
                                       ),
+
                                       const SizedBox(width: 16),
                                       Expanded(
                                         child: Column(
@@ -138,91 +219,105 @@ class HomePage extends StatelessWidget {
       child: Column(
         children: [
           /// Pet Stats Card
-          Center(
-            child: Card(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              elevation: 4,
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          FutureBuilder<Map<String, dynamic>?>(
+            future: fetchFirstPet(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              } else if (snapshot.hasError || !snapshot.hasData) {
+                return const Center(child: Text("No pet found."));
+              }
+
+              final pet = snapshot.data!;
+              final petName = pet['name'] ?? 'Unknown Pet';
+
+              return Center(
+                child: Card(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  elevation: 4,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              petName,
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            ElevatedButton(
+                              onPressed: () {
+                                showPetSelectorDialog(context);
+                              },
+                              child: const Text('Change Pet'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
                         const Text(
-                          "Buddy",
+                          "Walk",
                           style: TextStyle(
-                            fontSize: 24,
+                            fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        ElevatedButton(
-                          onPressed: () {
-                            showPetSelectorDialog(context);
-                          },
-                          child: const Text('Change Pet'),
+                        const SizedBox(height: 8),
+                        LinearProgressIndicator(
+                          value: 0.7,
+                          backgroundColor: Colors.grey[300],
+                          color: Colors.blue,
+                          minHeight: 10,
                         ),
+                        const SizedBox(height: 8),
+                        const Text("70% - 2.1 km"),
+                        const SizedBox(height: 24),
+                        const Text(
+                          "Playtime",
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        LinearProgressIndicator(
+                          value: 0.5,
+                          backgroundColor: Colors.grey[300],
+                          color: Colors.green,
+                          minHeight: 10,
+                        ),
+                        const SizedBox(height: 8),
+                        const Text("50% - 30 min"),
+                        const SizedBox(height: 24),
+                        const Text(
+                          "Food",
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        LinearProgressIndicator(
+                          value: 0.9,
+                          backgroundColor: Colors.grey[300],
+                          color: Colors.orange,
+                          minHeight: 10,
+                        ),
+                        const SizedBox(height: 8),
+                        const Text("90% - 450g"),
                       ],
                     ),
-                    const SizedBox(height: 24),
-                    const Text(
-                      "Walk",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    LinearProgressIndicator(
-                      value: 0.7,
-                      backgroundColor: Colors.grey[300],
-                      color: Colors.blue,
-                      minHeight: 10,
-                    ),
-                    const SizedBox(height: 8),
-                    const Text("70% - 2.1 km"),
-                    const SizedBox(height: 24),
-                    const Text(
-                      "Playtime",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    LinearProgressIndicator(
-                      value: 0.5,
-                      backgroundColor: Colors.grey[300],
-                      color: Colors.green,
-                      minHeight: 10,
-                    ),
-                    const SizedBox(height: 8),
-                    const Text("50% - 30 min"),
-                    const SizedBox(height: 24),
-                    const Text(
-                      "Food",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    LinearProgressIndicator(
-                      value: 0.9,
-                      backgroundColor: Colors.grey[300],
-                      color: Colors.orange,
-                      minHeight: 10,
-                    ),
-                    const SizedBox(height: 8),
-                    const Text("90% - 450g"),
-                  ],
+                  ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
 
           const SizedBox(height: 30),
@@ -243,182 +338,145 @@ class HomePage extends StatelessWidget {
                     style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 16),
-                  Scrollbar(
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 140,
-                            margin: const EdgeInsets.only(right: 12),
-                            child: Column(
-                              children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: Image.asset(
-                                    'assets/pets/pet1.png', // Example images
-                                    height: 100,
-                                    width: 140,
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  "Clover",
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                ElevatedButton(
-                                  onPressed: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder:
-                                            (context) =>
-                                                const PetAdoptionPage(),
+                  FutureBuilder<List<Map<String, dynamic>>>(
+                    future: fetchAdoptablePets(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      } else if (snapshot.hasError) {
+                        return Text('Error: ${snapshot.error}');
+                      } else if (snapshot.data!.isEmpty) {
+                        return const Text(
+                          'No adoptable pets available right now.',
+                        );
+                      } else {
+                        final pets = snapshot.data!;
+                        return Column(
+                          children: [
+                            SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                children: [
+                                  ...pets.take(5).map((pet) {
+                                    return Container(
+                                      width: 140,
+                                      margin: const EdgeInsets.only(right: 12),
+                                      child: Column(
+                                        children: [
+                                          ClipRRect(
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                            child: Image.network(
+                                              pet['image'] ?? '',
+                                              height: 100,
+                                              width: 140,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (
+                                                context,
+                                                error,
+                                                stackTrace,
+                                              ) {
+                                                return Image.asset(
+                                                  'assets/images/dog.png',
+                                                  height: 100,
+                                                  width: 140,
+                                                  fit: BoxFit.cover,
+                                                );
+                                              },
+                                            ),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            pet['name'] ?? 'Unknown',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          ElevatedButton(
+                                            onPressed: () {
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder:
+                                                      (_) => PetDetailsPage(
+                                                        pet: pet,
+                                                      ),
+                                                ),
+                                              );
+                                            },
+                                            style: ElevatedButton.styleFrom(
+                                              minimumSize: const Size(
+                                                double.infinity,
+                                                36,
+                                              ),
+                                              textStyle: const TextStyle(
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                            child: const Text('Adopt'),
+                                          ),
+                                        ],
                                       ),
                                     );
-                                  },
-
-                                  style: ElevatedButton.styleFrom(
-                                    minimumSize: const Size(
-                                      double.infinity,
-                                      36,
+                                  }),
+                                  // This is the 6th "More Pets" button styled card
+                                  GestureDetector(
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder:
+                                              (_) => const PetAdoptionPage(),
+                                        ),
+                                      );
+                                    },
+                                    child: Container(
+                                      width: 140,
+                                      margin: const EdgeInsets.only(right: 12),
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        border: Border.all(color: Colors.teal),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: const [
+                                          Icon(
+                                            Icons.pets,
+                                            color: Colors.teal,
+                                            size: 40,
+                                          ),
+                                          SizedBox(height: 12),
+                                          Text(
+                                            "More Pets",
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              color: Colors.teal,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                    textStyle: const TextStyle(fontSize: 12),
                                   ),
-                                  child: const Text('Adopt'),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
-                          Container(
-                            width: 140,
-                            margin: const EdgeInsets.only(right: 12),
-                            child: Column(
-                              children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: Image.asset(
-                                    'assets/pets/pet1.png', // Example images
-                                    height: 100,
-                                    width: 140,
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  "Haru",
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                ElevatedButton(
-                                  onPressed: () {
-                                    // TODO: Adopt functionality
-                                  },
-
-                                  style: ElevatedButton.styleFrom(
-                                    minimumSize: const Size(
-                                      double.infinity,
-                                      36,
-                                    ),
-                                    textStyle: const TextStyle(fontSize: 12),
-                                  ),
-                                  child: const Text('Adopt'),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            width: 140,
-                            margin: const EdgeInsets.only(right: 12),
-                            child: Column(
-                              children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: Image.asset(
-                                    'assets/pets/pet1.png', // Example images
-                                    height: 100,
-                                    width: 140,
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  "Dagul",
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                ElevatedButton(
-                                  onPressed: () {
-                                    // TODO: Adopt functionality
-                                  },
-
-                                  style: ElevatedButton.styleFrom(
-                                    minimumSize: const Size(
-                                      double.infinity,
-                                      36,
-                                    ),
-                                    textStyle: const TextStyle(fontSize: 12),
-                                  ),
-                                  child: const Text('Adopt'),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            width: 140,
-                            margin: const EdgeInsets.only(right: 12),
-                            child: Column(
-                              children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: Image.asset(
-                                    'assets/pets/pet1.png', // Example images
-                                    height: 100,
-                                    width: 140,
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  "Bambam",
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                ElevatedButton(
-                                  onPressed: () {
-                                    // TODO: Adopt functionality
-                                  },
-
-                                  style: ElevatedButton.styleFrom(
-                                    minimumSize: const Size(
-                                      double.infinity,
-                                      36,
-                                    ),
-                                    textStyle: const TextStyle(fontSize: 12),
-                                  ),
-                                  child: const Text('Adopt'),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                            const SizedBox(height: 16),
+                          ],
+                        );
+                      }
+                    },
                   ),
                 ],
               ),
             ),
           ),
+
           Card(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),

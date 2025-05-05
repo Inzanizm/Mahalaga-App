@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:mahalaga_app/views/pages/pet_page/add_pet_page.dart';
 import 'package:mahalaga_app/views/pages/pet_page/pet_details_page.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+final supabase = Supabase.instance.client;
 
 class PetAdoptionPage extends StatefulWidget {
   const PetAdoptionPage({super.key});
@@ -10,6 +13,8 @@ class PetAdoptionPage extends StatefulWidget {
 }
 
 class _PetAdoptionPageState extends State<PetAdoptionPage> {
+  bool isLoading = true;
+
   List<Map<String, String>> adoptablePets = [
     {
       'name': 'Bella',
@@ -58,7 +63,42 @@ class _PetAdoptionPageState extends State<PetAdoptionPage> {
   void initState() {
     super.initState();
     // Initially, display all adoptable pets
-    filteredPets = adoptablePets;
+    fetchPetsFromSupabase();
+  }
+
+  Future<void> fetchPetsFromSupabase() async {
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+      final response = await supabase
+          .from('adoptable_pets')
+          .select()
+          .order('name', ascending: true);
+
+          debugPrint('Supabase response: $response');
+
+      if (mounted) {
+        setState(() {
+          adoptablePets = List<Map<String, String>>.from(
+            response.map(
+              (e) =>
+                  e.map((key, value) => MapEntry(key, value?.toString() ?? '')),
+            ),
+          );
+          filteredPets = adoptablePets;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching pets: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    }
   }
 
   // Function to filter pets by breed
@@ -77,6 +117,20 @@ class _PetAdoptionPageState extends State<PetAdoptionPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (isLoading) {
+      return const Scaffold(
+        backgroundColor: Colors.white, // optional
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (filteredPets.isEmpty) {
+      return const Scaffold(
+         backgroundColor: Colors.white, 
+        body: Center(child: Text('No adoptable pets found.')),
+      );
+    }
+
     return Stack(
       children: [
         CustomScrollView(

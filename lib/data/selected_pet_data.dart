@@ -3,13 +3,12 @@
 //   static Map<String, dynamic>? selectedPet;
 // }
 import 'package:flutter/material.dart';
-
+import 'package:mahalaga_app/database/pet_table.dart';
 class SelectedPetData {
-  static ValueNotifier<Map<String, dynamic>> selectedPetNotifier =
-      ValueNotifier({});
+  static ValueNotifier<PetTable?> selectedPetNotifier = ValueNotifier(null);
 
-  static Map<String, dynamic> get selectedPet => selectedPetNotifier.value;
-  static set selectedPet(Map<String, dynamic> pet) {
+  static PetTable? get selectedPet => selectedPetNotifier.value;
+  static set selectedPet(PetTable? pet) {
     selectedPetNotifier.value = pet;
   }
 }

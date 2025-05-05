@@ -13,7 +13,10 @@ import 'package:mahalaga_app/views/pages/pet_page/pet_detail_screen.dart';
 // import 'package:table_calendar/table_calendar.dart';
 
 class PetProfileView extends StatefulWidget {
-  const PetProfileView({super.key});
+
+  final PetTable pet;
+  const PetProfileView({super.key, required this.pet});
+  
 
   @override
   State<PetProfileView> createState() => _PetProfileViewState();
@@ -363,7 +366,7 @@ class _PetProfileViewState extends State<PetProfileView> {
                       ...filteredPets.map((pet) {
                         return GestureDetector(
                           onTap: () {
-                            SelectedPetData.selectedPet = pet.toMap();
+                            SelectedPetData.selectedPet = pet;
                             Navigator.push(
                               context,
                               MaterialPageRoute(
